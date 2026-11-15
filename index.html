@@ -613,7 +613,7 @@ summary { cursor: pointer; width: fit-content; }
     const sorted = evs.slice().sort((a, b) => (b.m.id === (me && me.id)) - (a.m.id === (me && me.id)) || b.ev.total - a.ev.total);
     if (!sorted.length && loaded) {
       const em = document.createElement("div"); em.className = "empty";
-      em.innerHTML = "<b>아직 참가자가 없어요.</b><span>위에서 이름과 비밀번호 4자리로 참가하면 털 깎인 어린양이 생겨요.</span>";
+      em.innerHTML = "<b>아직 참가자가 없어요.</b><span>위에서 닉네임을 등록하면 털 깎인 어린양이 생겨요.</span>";
       grid.appendChild(em);
     }
     sorted.forEach(({ m, ev }) => grid.appendChild(card(m, ev, winners ? bonus : 0)));
