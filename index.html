@@ -217,6 +217,9 @@ summary { cursor: pointer; width: fit-content; }
 .demo { background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 12px; padding: 10px 14px; font-size: 13px; }
 .adminbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; font-size: 13px; }
 .adminbar input { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); color: var(--ink); }
+.me-line { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.me-line b { font-size: 17px; }
+.adm-link { width: 100%; font: 12px var(--f-mono); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--bg); color: var(--ink); }
 .adm-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 @media (max-width: 760px) { .panel { grid-template-columns: 1fr; } .panel .join { border-left: 0; padding-left: 0; border-top: 1px dashed var(--line); padding-top: 14px; } }
 
@@ -239,21 +242,18 @@ summary { cursor: pointer; width: fit-content; }
   <section class="panel" aria-label="인증하기">
     <div class="col">
       <h2>오늘 성전 닦기</h2>
-      <p class="hint">10분 이상 움직이고 슬랙에 인증 사진을 올렸다면, 내 이름과 비밀번호로 닦아 주세요. 하루에 한 번만 닦을 수 있어요.</p>
-      <div class="fields">
-        <select id="ciName" aria-label="내 이름"></select>
-        <input id="ciPin" type="password" inputmode="numeric" maxlength="4" placeholder="비밀번호 4자리" aria-label="비밀번호 4자리" autocomplete="off">
-      </div>
+      <p class="hint" id="ciHint">10분 이상 움직이고 슬랙에 인증 사진을 올렸다면 눌러 주세요. 하루에 한 번만 닦을 수 있어요.</p>
+      <p class="me-line" id="meLine" hidden>내 어린양: <b id="meName"></b> <button class="x" id="meForget">내가 아니에요</button></p>
       <button class="btn" id="ciBtn">오늘 성전 닦기</button>
     </div>
     <div class="col join" id="joinBox">
-      <h2>처음이라면 참가하기</h2>
-      <p class="hint">이름(별명 가능)과 숫자 4자리 비밀번호를 정해 주세요. 매일 닦을 때 써요.</p>
+      <h2>닉네임 등록하기</h2>
+      <p class="hint">처음 한 번만 닉네임을 등록하면, 이 기기에서 바로 닦을 수 있어요.</p>
       <div class="fields">
-        <input id="jName" class="nm-in" type="text" maxlength="20" placeholder="이름" aria-label="이름" autocomplete="off">
-        <input id="jPin" type="password" inputmode="numeric" maxlength="4" placeholder="비밀번호 4자리" aria-label="새 비밀번호 4자리" autocomplete="off">
+        <input id="jName" class="nm-in" type="text" maxlength="20" placeholder="닉네임" aria-label="닉네임" autocomplete="off">
       </div>
-      <button class="btn" id="jBtn" style="background:var(--ink)">참가하기</button>
+      <button class="btn" id="jBtn" style="background:var(--ink)">등록하기</button>
+      <p class="hint">이미 등록했는데 휴대폰이나 브라우저가 바뀌었다면, 주최자에게 ‘연결 링크’를 받아 열어 주세요.</p>
     </div>
   </section>
 
@@ -541,7 +541,9 @@ summary { cursor: pointer; width: fit-content; }
   const openEditors = new Set();
   const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
   const ss = { get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} } };
-  let myName = store.get("seongjeon.name") || "";
+  let me = null; // {id, name, token} remembered on this device
+  try { me = JSON.parse(store.get("seongjeon.me") || "null"); } catch (e) { me = null; }
+  const saveMe = (v) => { me = v; store.set("seongjeon.me", v ? JSON.stringify(v) : ""); };
 
   async function load() {
     if (DEMO) { members = []; loaded = true; $("status").textContent = ""; render(); return; }
@@ -560,11 +562,10 @@ summary { cursor: pointer; width: fit-content; }
   const ERR = {
     NOT_STARTED: "챌린지는 11/16(월)부터 시작해요.",
     ENDED: "챌린지가 끝났어요.",
-    BAD_PIN: "이름이나 비밀번호가 맞지 않아요.",
+    BAD_TOKEN: "이 기기에 연결된 어린양을 찾을 수 없어요. 닉네임을 다시 등록하거나 연결 링크를 받아 주세요.",
     ALREADY: "오늘은 이미 닦았어요. 내일 또 만나요!",
-    NAME_TAKEN: "이미 있는 이름이에요. 다른 이름을 써 주세요.",
-    NAME_FORMAT: "이름은 1~20자로 적어 주세요.",
-    PIN_FORMAT: "비밀번호는 숫자 4자리예요.",
+    NAME_TAKEN: "이미 있는 닉네임이에요. 다른 닉네임을 써 주세요.",
+    NAME_FORMAT: "닉네임은 1~20자로 적어 주세요.",
     BAD_ADMIN: "관리자 비밀번호가 맞지 않아요.",
   };
   const errMsg = (e) => { const m = (e && (e.message || e.details || "")) + ""; const k = Object.keys(ERR).find((key) => m.includes(key)); return k ? ERR[k] : "저장하지 못했어요. 잠시 후 다시 시도해 주세요."; };
@@ -591,25 +592,25 @@ summary { cursor: pointer; width: fit-content; }
       todayIdx >= DAYS ? `최종 결과: 성공 ${winners}명, 남은 보증금 ${fmt(pot)}원을 성공자에게 나눕니다.` :
       `오늘 기준 계산이에요. 진행 중 ${ongoing}명 · 성공 ${winners}명.`;
 
-    // name picker
-    const sel = $("ciName"), cur = sel.value || myName;
-    sel.textContent = "";
-    const ph = document.createElement("option"); ph.value = ""; ph.textContent = members.length ? "내 이름 고르기" : "먼저 참가해 주세요"; sel.appendChild(ph);
-    members.forEach((m) => { const o = document.createElement("option"); o.value = m.name; o.textContent = m.name; sel.appendChild(o); });
-    sel.value = members.some((m) => m.name === cur) ? cur : "";
-    const mine = members.find((m) => m.name === sel.value);
+    // my lamb on this device
+    if (me && loaded && !DEMO && !members.some((m) => m.id === me.id)) saveMe(null); // removed by organizer
+    const mine = me ? members.find((m) => m.id === me.id) : null;
+    $("meLine").hidden = !me;
+    if (me) $("meName").textContent = me.name;
     const ci = $("ciBtn");
-    if (todayIdx < 0) { ci.disabled = true; ci.textContent = "11/16부터 닦을 수 있어요"; }
+    ci.classList.remove("done");
+    if (!me) { ci.disabled = true; ci.textContent = "먼저 닉네임을 등록해 주세요"; }
+    else if (todayIdx < 0) { ci.disabled = true; ci.textContent = "11/16부터 닦을 수 있어요"; }
     else if (todayIdx >= DAYS) { ci.disabled = true; ci.textContent = "챌린지가 끝났어요"; }
     else if (mine && mine.days.has(todayIdx)) { ci.disabled = true; ci.textContent = "오늘 닦기 완료 ✓ 내일 또 만나요"; ci.classList.add("done"); }
-    else { ci.disabled = busy; ci.textContent = "오늘 성전 닦기"; ci.classList.remove("done"); }
-    $("joinBox").hidden = todayIdx >= DAYS;
+    else { ci.disabled = busy; ci.textContent = "오늘 성전 닦기"; }
+    $("joinBox").hidden = todayIdx >= DAYS || !!me;
     $("adminBar").hidden = !ADMIN;
 
     const grid = $("grid");
     grid.textContent = "";
     uidN = 0;
-    const sorted = evs.slice().sort((a, b) => (b.m.name === myName) - (a.m.name === myName) || b.ev.total - a.ev.total);
+    const sorted = evs.slice().sort((a, b) => (b.m.id === (me && me.id)) - (a.m.id === (me && me.id)) || b.ev.total - a.ev.total);
     if (!sorted.length && loaded) {
       const em = document.createElement("div"); em.className = "empty";
       em.innerHTML = "<b>아직 참가자가 없어요.</b><span>위에서 이름과 비밀번호 4자리로 참가하면 털 깎인 어린양이 생겨요.</span>";
@@ -622,14 +623,14 @@ summary { cursor: pointer; width: fit-content; }
   function card(m, ev, bonus) {
     const pillTxt = { ok: "성공!", fail: "탈락", run: "진행 중", wait: "시작 전" }[ev.state];
     const el = document.createElement("article");
-    const me = m.name === myName;
-    el.className = "card" + (me ? " me" : "") + "";
+    const isMe = !!me && m.id === me.id;
+    el.className = "card" + (isMe ? " me" : "") + "";
     const stCls = ev.total >= 10 ? " gold" : ev.total >= 5 ? " clean" : "";
     const wk = (i) => `<span class="${ev.w[i] >= NEED_WEEK ? "met" : ""}">${i + 1}주차 ${ev.w[i]}/5</span>`;
     el.innerHTML = `
       ${lambScene(Math.min(ev.total, 14), ev.w)}
       <div class="body">
-        <div class="row"><div class="name"><span class="nm"></span>${me ? '<span class="you">나</span>' : ""}</div><span class="pill ${ev.state}">${pillTxt}</span></div>
+        <div class="row"><div class="name"><span class="nm"></span>${isMe ? '<span class="you">나</span>' : ""}</div><span class="pill ${ev.state}">${pillTxt}</span></div>
         <div class="stage${stCls}">${stageOf(ev.total)}</div>
         <div class="meta"><b class="num">${ev.total}</b>/10일 인증 · ${ev.total <= 7 ? "1주차: 빛이 들어오는 중" : "2주차: 털이 자라는 중"}<br>${wk(0)} · ${wk(1)}</div>
         <div class="slot-edit"></div>
@@ -687,36 +688,42 @@ summary { cursor: pointer; width: fit-content; }
 
   // ---------- actions ----------
   async function checkIn() {
-    const name = $("ciName").value, pin = $("ciPin").value.trim();
-    if (!name) { toast("내 이름을 골라 주세요."); return; }
-    if (!/^\d{4}$/.test(pin)) { toast(ERR.PIN_FORMAT); return; }
+    if (!me) { toast("먼저 닉네임을 등록해 주세요."); return; }
     if (DEMO) { toast("미리보기에서는 저장되지 않아요."); return; }
     busy = true; render();
-    const { data, error } = await sb.rpc("check_in", { p_name: name, p_pin: pin });
+    const { data, error } = await sb.rpc("check_in", { p_token: me.token });
     busy = false;
-    if (error) { toast(errMsg(error)); render(); return; }
-    myName = name; store.set("seongjeon.name", name);
-    $("ciPin").value = "";
-    const m = members.find((x) => x.name === name);
+    if (error) { if ((error.message || "").includes("BAD_TOKEN")) saveMe(null); toast(errMsg(error)); render(); return; }
+    const m = members.find((x) => x.id === me.id);
     if (m) { const prevDays = new Set(m.days); m.days.add(data); flashId = m.id; showPop(m.days, prevDays); }
     else toast(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
     render(); load();
   }
 
   async function join() {
-    const name = $("jName").value.trim(), pin = $("jPin").value.trim();
+    const name = $("jName").value.trim();
     if (!name || name.length > 20) { toast(ERR.NAME_FORMAT); return; }
-    if (!/^\d{4}$/.test(pin)) { toast(ERR.PIN_FORMAT); return; }
     if (DEMO) { toast("미리보기에서는 저장되지 않아요."); return; }
     $("jBtn").disabled = true;
-    const { error } = await sb.rpc("join_challenge", { p_name: name, p_pin: pin });
+    const { data, error } = await sb.rpc("join_challenge", { p_name: name });
     $("jBtn").disabled = false;
     if (error) { toast(errMsg(error)); return; }
-    myName = name; store.set("seongjeon.name", name);
-    $("jName").value = ""; $("jPin").value = "";
-    toast("참가 완료! 털 깎인 어린양이 생겼어요. 비밀번호를 꼭 기억해 주세요.");
+    saveMe({ id: data.id, name: data.name, token: data.token });
+    $("jName").value = "";
+    toast("등록 완료! 털 깎인 어린양이 생겼어요. 이제 이 기기에서 바로 닦을 수 있어요.");
     await load();
-    $("ciName").value = name; render();
+  }
+
+  // open a reconnect link: ?key=<token>
+  async function claimFromLink() {
+    const key = qs.get("key");
+    if (!key || DEMO) return;
+    const { data, error } = await sb.rpc("whoami", { p_token: key });
+    const url = new URL(location.href); url.searchParams.delete("key"); history.replaceState(null, "", url.pathname + url.search + url.hash);
+    if (error || !data) { toast("연결 링크가 올바르지 않아요. 주최자에게 다시 받아 주세요."); return; }
+    saveMe({ id: data.id, name: data.name, token: data.token });
+    toast(`${data.name}님의 어린양과 연결했어요!`);
+    render();
   }
 
   // ---------- organizer tools (?admin) ----------
@@ -742,8 +749,18 @@ summary { cursor: pointer; width: fit-content; }
       box.appendChild(b);
     }
     const row = det.querySelector(".adm-row");
-    const pin = document.createElement("button"); pin.className = "x"; pin.textContent = "비밀번호를 0000으로 초기화";
-    pin.addEventListener("click", async () => { if (await adminCall("admin_reset_pin", { p_participant: m.id, p_pin: "0000" })) toast(`${m.name}님 비밀번호를 0000으로 바꿨어요.`); });
+    const pin = document.createElement("button"); pin.className = "x"; pin.textContent = "연결 링크 만들기";
+    pin.addEventListener("click", async () => {
+      const code = adminCode(); if (!code) { toast("관리자 비밀번호를 먼저 입력해 주세요."); return; }
+      const { data, error } = await sb.rpc("admin_get_token", { p_code: code, p_participant: m.id });
+      if (error || !data) { toast(error ? errMsg(error) : "링크를 만들지 못했어요."); return; }
+      ss.set("seongjeon.admin", code);
+      const link = location.origin + location.pathname + "?key=" + data;
+      let box = det.querySelector(".adm-link");
+      if (!box) { box = document.createElement("input"); box.className = "adm-link"; box.readOnly = true; det.appendChild(box); }
+      box.value = link; box.select();
+      try { await navigator.clipboard.writeText(link); toast(`${m.name}님 연결 링크를 복사했어요. 본인에게만 보내 주세요.`); } catch (e) { toast("링크를 길게 눌러 복사해 주세요. 본인에게만 보내 주세요."); }
+    });
     const rm = document.createElement("button"); rm.className = "x"; rm.textContent = "참가자 삭제";
     rm.addEventListener("click", async () => {
       if (!rm.dataset.armed) { rm.dataset.armed = "1"; rm.textContent = "정말 삭제할까요? 한 번 더"; rm.classList.add("danger"); setTimeout(() => { if (rm.isConnected) { delete rm.dataset.armed; rm.textContent = "참가자 삭제"; rm.classList.remove("danger"); } }, 4000); return; }
@@ -757,13 +774,17 @@ summary { cursor: pointer; width: fit-content; }
 
   // ---------- boot ----------
   $("ciBtn").addEventListener("click", checkIn);
-  $("ciName").addEventListener("change", render);
-  $("ciPin").addEventListener("keydown", (e) => { if (e.key === "Enter") checkIn(); });
+  $("jName").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
+  $("meForget").addEventListener("click", () => {
+    const b = $("meForget");
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "이 기기에서 연결 해제할까요? 한 번 더"; setTimeout(() => { delete b.dataset.armed; b.textContent = "내가 아니에요"; }, 4000); return; }
+    saveMe(null); delete b.dataset.armed; b.textContent = "내가 아니에요"; toast("이 기기에서 연결을 해제했어요."); render();
+  });
   $("jBtn").addEventListener("click", join);
   if (ADMIN) { $("adminCode").value = ss.get("seongjeon.admin") || ""; $("adminCheck").addEventListener("click", async () => { if (await adminCall("is_admin", {})) { const { data } = await sb.rpc("is_admin", { p_code: adminCode() }); toast(data ? "관리자 확인 완료" : ERR.BAD_ADMIN); } }); }
   if (DEMO) $("demoNote").hidden = false;
   render();
-  load();
+  load().then(claimFromLink);
   setInterval(load, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 
